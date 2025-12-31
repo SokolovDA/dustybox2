@@ -1,0 +1,37 @@
+plugins {
+    id 'groovy'
+}
+
+dependencies {
+    // Зависимость от ядра
+    implementation project(':dustybox-core')
+
+    // Spring зависимости
+    implementation 'org.springframework.boot:spring-boot-starter-web:4.0.1'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa:4.0.1'
+
+    // Для логирования
+    implementation 'org.slf4j:slf4j-api:2.0.7'
+
+    // Для работы с Groovy
+    implementation 'org.apache.groovy:groovy:5.0.3'
+}
+
+jar {
+    archiveBaseName = 'cddb-plugin'
+
+    // Собираем fat JAR со всеми зависимостями, кроме ядра
+    from {
+        configurations.runtimeClasspath.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+    }
+
+    exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    // Добавляем файл plugin.yaml в JAR
+    into('META-INF/plugins') {
+        from 'src/main/resources/plugin.yaml'
+    }
+}

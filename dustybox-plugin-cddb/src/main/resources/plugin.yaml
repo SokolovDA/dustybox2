@@ -1,0 +1,8 @@
+name: "cd-database"
+version: "1.0.0"
+description: "Управление базой данных CD дисков"
+mainClass: "com.dustymotors.plugins.cddb.CdDatabasePlugin"
+type: "database"
+provides:
+  - "cd-crud"
+  - "cd-web-ui"

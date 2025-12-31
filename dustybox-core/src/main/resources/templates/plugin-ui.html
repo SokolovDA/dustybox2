@@ -1,0 +1,71 @@
+<!-- dustybox-core/src/main/resources/templates/plugin-ui.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dustybox - Plugin Platform</title>
+
+    <!-- Подключаем ресурсы плагинов -->
+    <link th:each="resource : ${resources}"
+          th:href="${resource.type == 'css' ? resource.url : ''}"
+          th:if="${resource.type == 'css'}"
+          rel="stylesheet">
+</head>
+<body>
+<!-- Навигация из плагинов -->
+<nav class="navbar">
+    <div class="nav-brand">🎛️ Dustybox</div>
+    <div class="nav-items">
+        <a th:each="item : ${menuItems}"
+           th:href="@{${item.path}}"
+           th:text="${item.title}"
+           class="nav-item">
+            <i th:text="${item.icon}"></i>
+        </a>
+    </div>
+</nav>
+
+<!-- Контейнер для плагинов -->
+<div id="plugin-container">
+    <!-- Контент плагинов загружается динамически -->
+</div>
+
+<!-- Скрипты плагинов -->
+<script th:each="resource : ${resources}"
+        th:src="${resource.type == 'js' ? resource.url : ''}"
+        th:if="${resource.type == 'js'}"></script>
+
+<!-- Главный скрипт ядра -->
+<script>
+    class DustyboxPluginManager {
+        constructor() {
+            this.plugins = []
+            this.currentPlugin = null
+        }
+
+        async loadPluginUI(pluginName, path) {
+            const response = await fetch(`/plugins/${pluginName}/${path}`)
+            const html = await response.text()
+
+            document.getElementById('plugin-container').innerHTML = html
+            this.currentPlugin = pluginName
+        }
+
+        async callPluginApi(pluginName, endpoint, method = 'GET', data = null) {
+            const options = {
+                method: method,
+                headers: { 'Content-Type': 'application/json' }
+            }
+
+            if (data) {
+                options.body = JSON.stringify(data)
+            }
+
+            const response = await fetch(`/plugins/${pluginName}${endpoint}`, options)
+            return await response.json()
+        }
+    }
+
+    window.Dustybox = new DustyboxPluginManager()
+</script>
+</body>
+</html>

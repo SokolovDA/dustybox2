@@ -1,0 +1,9 @@
+# Project exclude paths
+/.gradle/
+/build/
+/dustybox-core/build/
+/dustybox-core/build/classes/groovy/main/
+/dustybox-plugin-cddb/build/
+/dustybox-plugin-cddb/build/classes/groovy/main/
+/dustybox-plugin-script/build/
+/dustybox-plugin-script/build/classes/groovy/main/

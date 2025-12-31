@@ -1,0 +1,5 @@
+name: "script-manager"
+version: "1.0.0"
+description: "Управление и редактирование Groovy скриптов"
+mainClass: "com.dustymotors.plugins.script.ScriptPlugin"
+type: "core"

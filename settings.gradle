@@ -1,0 +1,11 @@
+// dustybox/settings.gradle
+rootProject.name = 'dustybox'
+
+// Включаем все подпроекты
+include 'dustybox-core'
+include 'dustybox-plugin-script'
+include 'dustybox-plugin-cddb'
+
+// Опционально можно переименовать
+// project(':dustybox-plugin-script').name = 'script-plugin'
+// project(':dustybox-plugin-cddb').name = 'cddb-plugin'
