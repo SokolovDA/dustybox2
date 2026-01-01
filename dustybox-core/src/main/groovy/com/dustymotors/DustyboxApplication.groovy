@@ -20,8 +20,5 @@ class DustyboxApplication {
 
     @PostConstruct
     void init() {
-        println "Dustybox Application starting..."
-        pluginManager.loadPlugins()
-        println "Dustybox Application started successfully"
     }
 }

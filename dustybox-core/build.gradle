@@ -25,6 +25,18 @@ dependencies {
 
     // Development Tools
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
+
+    // Swagger/OpenAPI для документации API
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
+
+    // Для работы с YAML (plugin.yaml)
+    implementation 'org.yaml:snakeyaml:2.2'
+
+    // Для работы с YAML
+    // implementation 'org.apache.groovy:groovy-yaml:5.0.3'
+
+    // Убедитесь, что есть эта зависимость для ClassLoader
+    implementation 'org.apache.groovy:groovy:5.0.3'
 }
 
 // Если у вас есть проблемы с JAXB (Java 11+)

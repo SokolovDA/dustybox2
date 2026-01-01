@@ -5,6 +5,8 @@ import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
 import org.springframework.web.bind.annotation.*
 import com.dustymotors.core.plugin.PluginManager
+import com.dustymotors.core.plugin.PluginInstance
+import com.dustymotors.core.plugin.DustyboxPlugin
 import groovy.transform.CompileStatic
 
 @Controller
@@ -18,8 +20,11 @@ class PluginWebController {
     @GetMapping("/")
     @ResponseBody
     Map<String, Object> listPlugins() {
+        Map<String, PluginInstance> plugins = pluginManager.loadedPlugins
+
         return [
-                plugins: pluginManager.loadedPlugins.collect { name, plugin ->
+                plugins: plugins.collect { name, pluginInstance ->
+                    DustyboxPlugin plugin = pluginInstance.pluginInstance
                     [
                             name: plugin.name,
                             version: plugin.version,

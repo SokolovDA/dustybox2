@@ -1,13 +1,33 @@
 package com.dustymotors.plugins.cddb
 
 import groovy.transform.CompileStatic
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import com.dustymotors.core.ScriptAccessible
 
+import jakarta.persistence.*
+
+// Сущность JPA
+@Entity
+@Table(name = "cd_disks")
 @CompileStatic
 class CdDisk {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id
+
+    @Column(nullable = false)
     String title
+
+    @Column(nullable = false)
     String artist
+
+    @Column
     Integer year
+
+    @Column(name = "created_at")
+    java.time.LocalDateTime createdAt = java.time.LocalDateTime.now()
 
     CdDisk() {}
 
@@ -18,71 +38,76 @@ class CdDisk {
     }
 }
 
+// Spring Data JPA репозиторий
+interface CdDiskRepository extends org.springframework.data.jpa.repository.JpaRepository<CdDisk, Long> {
+    List<CdDisk> findByArtistContainingIgnoreCase(String artist)
+    List<CdDisk> findByYearBetween(Integer startYear, Integer endYear)
+    List<CdDisk> findByTitleContainingIgnoreCase(String title)
+    long count()
+}
+
+// Сервис с транзакциями
+@Service
+@Transactional
+@ScriptAccessible // Теперь сервис доступен из скриптов!
 @CompileStatic
 class CdDiskService {
 
-    private List<CdDisk> disks = []
-    private Long nextId = 1L
+    @Autowired
+    private CdDiskRepository repository
 
-    List<CdDisk> findAll() {
-        // В Groovy используем spread operator для клонирования списка
-        // или просто возвращаем новый ArrayList
-        return new ArrayList<CdDisk>(disks)
+    // Основные CRUD операции
+    CdDisk save(CdDisk disk) {
+        return repository.save(disk)
     }
 
     CdDisk findById(Long id) {
-        return disks.find { it.id == id }
+        return repository.findById(id).orElse(null)
     }
 
-    CdDisk save(CdDisk disk) {
-        if (disk.id == null) {
-            disk.id = nextId++
-            disks.add(disk)
-            return disk
-        } else {
-            def existingIndex = disks.findIndexOf { it.id == disk.id }
-            if (existingIndex >= 0) {
-                // Создаем новый объект с обновленными данными
-                CdDisk existing = disks[existingIndex]
-                existing.title = disk.title
-                existing.artist = disk.artist
-                existing.year = disk.year
-                return existing
-            } else {
-                // Диска с таким ID нет, добавляем как новый
-                disks.add(disk)
-                return disk
-            }
-        }
+    List<CdDisk> findAll() {
+        return repository.findAll()
     }
 
-    boolean deleteById(Long id) {
-        def removed = disks.removeIf { it.id == id }
-        return removed
+    void deleteById(Long id) {
+        repository.deleteById(id)
     }
 
+    // Бизнес-методы
     List<CdDisk> findByArtist(String artist) {
         if (!artist) return []
-
-        String lowerArtist = artist.toLowerCase()
-        return disks.findAll { disk ->
-            disk.artist?.toLowerCase()?.contains(lowerArtist)
-        }
-    }
-
-    // Дополнительные полезные методы
-    int count() {
-        return disks.size()
+        return repository.findByArtistContainingIgnoreCase(artist)
     }
 
     List<CdDisk> findByYearRange(Integer fromYear, Integer toYear) {
-        return disks.findAll { disk ->
-            disk.year != null && disk.year >= fromYear && disk.year <= toYear
-        }
+        if (fromYear == null || toYear == null) return []
+        return repository.findByYearBetween(fromYear, toYear)
     }
 
-    void clearAll() {
-        disks.clear()
-        nextId = 1L
+    List<CdDisk> search(String query) {
+        if (!query) return []
+
+        def results = [] as Set<CdDisk>
+        results.addAll(repository.findByTitleContainingIgnoreCase(query))
+        results.addAll(repository.findByArtistContainingIgnoreCase(query))
+
+        try {
+            def year = Integer.parseInt(query)
+            results.addAll(repository.findByYearBetween(year, year))
+        } catch (NumberFormatException e) {
+            // Игнорируем, если query не число
+        }
+
+        return results.toList()
+    }
+
+    long count() {
+        return repository.count()
+    }
+
+    // Метод для работы со скриптами
+    CdDisk createDisk(String title, String artist, Integer year) {
+        def disk = new CdDisk(title: title, artist: artist, year: year)
+        return save(disk)
     }
 }

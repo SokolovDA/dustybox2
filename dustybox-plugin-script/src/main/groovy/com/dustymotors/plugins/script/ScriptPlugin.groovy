@@ -1,52 +1,49 @@
 package com.dustymotors.plugins.script
 
+import com.dustymotors.core.plugin.*
 import groovy.transform.CompileStatic
-import groovy.util.logging.Slf4j
 
-@Slf4j
 @CompileStatic
-class ScriptPlugin {
+class ScriptPlugin implements DustyboxPlugin {  // Убедитесь, что implements есть
 
+    @Override
     String getName() { "script-manager" }
 
+    @Override
     String getVersion() { "1.0.0" }
 
+    @Override
     String getDescription() { "Управление и редактирование Groovy скриптов" }
 
-    void initialize(def context) {
-        log.info("Script Manager Plugin initializing...")
-        println "Script Manager Plugin initialized"
+    @Override
+    void initialize(PluginContext context) {
+        println "Script Manager Plugin initializing..."
     }
 
+    @Override
     void start() {
-        log.info("Script Manager Plugin starting...")
         println "Script Manager Plugin started"
     }
 
+    @Override
     void stop() {
-        log.info("Script Manager Plugin stopping...")
         println "Script Manager Plugin stopped"
     }
 
-    List getEndpoints() {
+    @Override
+    List<PluginMenuItem> getMenuItems() {
         return [
-                [path: "/api/scripts", method: "GET", handler: { params ->
-                    return [message: "Scripts endpoint", status: "ok"]
-                }]
+                new PluginMenuItem(
+                        title: "Скрипты",
+                        icon: "📝",
+                        path: "/web/plugins/script",
+                        order: 1
+                )
         ]
     }
 
-    List getMenuItems() {
-        return [
-                [title: "Скрипты", icon: "📝", path: "/web/scripts", order: 1]
-        ]
-    }
-
-    List getServices() {
-        return []
-    }
-
-    List getWebResources() {
+    @Override
+    List<WebResource> getWebResources() {
         return []
     }
 }
