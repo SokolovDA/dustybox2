@@ -1,10 +1,6 @@
 package com.dustymotors.core.plugin
 
 import groovy.transform.CompileStatic
-import com.dustymotors.core.ServiceRegistry
-import com.dustymotors.core.EventBus
-import com.dustymotors.core.WebUIManager
-import com.dustymotors.core.ScriptEngine
 import org.springframework.context.ApplicationContext
 import javax.sql.DataSource
 
@@ -24,12 +20,6 @@ interface DustyboxPlugin {
 
 @CompileStatic
 class PluginContext {
-    // Основные сервисы ядра - явные типы
-    ServiceRegistry serviceRegistry
-    EventBus eventBus
-    WebUIManager webUIManager
-    ScriptEngine scriptEngine
-
     // Доступ к данным
     DataSource dataSource
 
@@ -38,22 +28,21 @@ class PluginContext {
     ApplicationContext pluginSpringContext
 
     // Методы-помощники для удобства плагина
-    void registerService(String name, Object service) {
-        serviceRegistry.register("${pluginId}.${name}", service)
-    }
-
     Object getService(String name) {
-        return serviceRegistry.getService("${pluginId}.${name}")
+        if (pluginSpringContext != null) {
+            try {
+                return pluginSpringContext.getBean(name)
+            } catch (Exception e) {
+                return null
+            }
+        }
+        return null
     }
 
-    void publishEvent(String event, Map<String, Object> data = [:]) {
-        Map<String, Object> eventData = new HashMap<>(data)
-        eventData.put("pluginId", pluginId)
-        eventBus.publish(event, eventData)
-    }
-
-    void subscribe(String event, Closure handler) {
-        eventBus.subscribe(event, handler)
+    // Метод для регистрации бинов (если нужно)
+    void registerBean(String name, Object bean) {
+        // Эта функциональность может быть добавлена позже
+        println "Bean registration not implemented yet: ${name}"
     }
 }
 

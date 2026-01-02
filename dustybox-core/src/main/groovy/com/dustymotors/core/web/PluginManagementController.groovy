@@ -142,7 +142,8 @@ class PluginManagementController {
     @PostMapping("/scan")
     ResponseEntity<Map<String, Object>> scanPlugins() {
         try {
-            pluginManager.scanAndLoadPlugins()
+            // Метод loadAllPlugins перезагружает плагины из директории
+            pluginManager.loadAllPlugins()
             return ResponseEntity.ok([
                     message: "Plugins directory scanned successfully",
                     pluginCount: pluginManager.loadedPlugins.size()

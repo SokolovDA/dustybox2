@@ -4,7 +4,7 @@ import com.dustymotors.core.plugin.*
 import groovy.transform.CompileStatic
 
 @CompileStatic
-class ScriptPlugin implements DustyboxPlugin {  // Убедитесь, что implements есть
+class ScriptPlugin extends BasePlugin {
 
     @Override
     String getName() { "script-manager" }
@@ -13,11 +13,12 @@ class ScriptPlugin implements DustyboxPlugin {  // Убедитесь, что im
     String getVersion() { "1.0.0" }
 
     @Override
-    String getDescription() { "Управление и редактирование Groovy скриптов" }
+    String getDescription() { "Управление скриптами" }
 
     @Override
     void initialize(PluginContext context) {
-        println "Script Manager Plugin initializing..."
+        super.initialize(context)
+        println "Script Manager Plugin initialized"
     }
 
     @Override
@@ -32,14 +33,7 @@ class ScriptPlugin implements DustyboxPlugin {  // Убедитесь, что im
 
     @Override
     List<PluginMenuItem> getMenuItems() {
-        return [
-                new PluginMenuItem(
-                        title: "Скрипты",
-                        icon: "📝",
-                        path: "/web/plugins/script",
-                        order: 1
-                )
-        ]
+        return []
     }
 
     @Override

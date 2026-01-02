@@ -15,7 +15,12 @@ class PluginClassLoader extends URLClassLoader {
             'jakarta.',
             'java.',
             'javax.',
-            'groovy.'
+            'groovy.',
+            'org.codehaus.groovy.',
+            'org.apache.groovy.',
+            'org.hibernate.',
+            'org.postgresql.',
+            'com.zaxxer.hikari.'
     ]
 
     PluginClassLoader(URL[] urls, ClassLoader parent) {

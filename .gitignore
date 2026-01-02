@@ -1,9 +1,28 @@
-# Project exclude paths
-/.gradle/
-/build/
-/dustybox-core/build/
-/dustybox-core/build/classes/groovy/main/
-/dustybox-plugin-cddb/build/
-/dustybox-plugin-cddb/build/classes/groovy/main/
-/dustybox-plugin-script/build/
-/dustybox-plugin-script/build/classes/groovy/main/
+# Gradle
+.gradle/
+build/
+out/
+classes/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Application
+*.jar
+plugins/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Database
+*.db
+*.sqlite

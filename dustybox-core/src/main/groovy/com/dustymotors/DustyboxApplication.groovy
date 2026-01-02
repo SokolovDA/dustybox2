@@ -7,6 +7,16 @@ import org.springframework.beans.factory.annotation.Autowired
 import jakarta.annotation.PostConstruct
 import com.dustymotors.core.plugin.PluginManager
 
+/*
+Здесь перечислены некоторые требования к Системе.
+
+Ядро и плагины должны предоставлять доступ к своим сервисам перекрестно.
+Например, в скриптах, которые запускает плагин dustybox-plugin-script,
+должен быть доступ к сервисам плагина dustybox-plugin-cddb.
+
+Также ядро и плагины должны предоставлять доступ к сервисам по протоколу REST.
+ */
+
 @SpringBootApplication
 class DustyboxApplication {
 

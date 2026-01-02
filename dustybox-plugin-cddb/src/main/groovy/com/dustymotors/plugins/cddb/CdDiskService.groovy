@@ -1,4 +1,3 @@
-// dustybox-plugin-cddb/src/main/groovy/com/dustymotors/plugins/cddb/CdDiskService.groovy
 package com.dustymotors.plugins.cddb
 
 import groovy.transform.CompileStatic
@@ -6,13 +5,11 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.core.RowMapper
-import com.dustymotors.core.ScriptAccessible
 import groovy.util.logging.Slf4j
 import jakarta.annotation.PostConstruct
 import java.sql.ResultSet
 import java.sql.SQLException
 
-// Простая модель данных без JPA аннотаций
 @CompileStatic
 class CdDisk {
     Long id
@@ -30,7 +27,6 @@ class CdDisk {
     }
 }
 
-// RowMapper для преобразования ResultSet в CdDisk
 @CompileStatic
 class CdDiskRowMapper implements RowMapper<CdDisk> {
     @Override
@@ -50,7 +46,6 @@ class CdDiskRowMapper implements RowMapper<CdDisk> {
 
 @Slf4j
 @Service
-@ScriptAccessible
 @CompileStatic
 class CdDiskService {
 
@@ -123,7 +118,6 @@ class CdDiskService {
         jdbcTemplate.update("DELETE FROM cd_disks WHERE id = ?", id)
     }
 
-    // Бизнес-методы
     List<CdDisk> findByArtist(String artist) {
         if (!artist) return []
         return jdbcTemplate.query("""
@@ -132,16 +126,6 @@ class CdDiskService {
             WHERE LOWER(artist) LIKE LOWER(?) 
             ORDER BY artist
         """, new CdDiskRowMapper(), "%${artist}%")
-    }
-
-    List<CdDisk> findByYearRange(Integer fromYear, Integer toYear) {
-        if (fromYear == null || toYear == null) return []
-        return jdbcTemplate.query("""
-            SELECT id, title, artist, year, created_at 
-            FROM cd_disks 
-            WHERE year BETWEEN ? AND ? 
-            ORDER BY year
-        """, new CdDiskRowMapper(), fromYear, toYear)
     }
 
     List<CdDisk> search(String query) {
@@ -163,11 +147,5 @@ class CdDiskService {
                 "SELECT COUNT(*) FROM cd_disks",
                 Long.class
         ) ?: 0
-    }
-
-    // Метод для работы со скриптами
-    CdDisk createDisk(String title, String artist, Integer year) {
-        def disk = new CdDisk(title: title, artist: artist, year: year)
-        return save(disk)
     }
 }

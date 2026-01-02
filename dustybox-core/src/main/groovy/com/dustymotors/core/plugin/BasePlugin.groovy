@@ -1,4 +1,3 @@
-// dustybox-core/src/main/groovy/com/dustymotors/core/plugin/BasePlugin.groovy
 package com.dustymotors.core.plugin
 
 import groovy.transform.CompileStatic

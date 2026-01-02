@@ -5,68 +5,84 @@ plugins {
 }
 
 dependencies {
-    // Spring Boot Starters (ОБЯЗАТЕЛЬНЫ!)
+    // Spring Boot Starters
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
 
     implementation 'org.postgresql:postgresql'
-
-    // Для аннотаций @PostConstruct, @PreDestroy
-    implementation 'jakarta.annotation:jakarta.annotation-api:2.1.1'
-
-    // Для HTTP сервлетов
-    implementation 'jakarta.servlet:jakarta.servlet-api:6.0.0'
-
-    // Для динамической загрузки классов
-    implementation 'org.reflections:reflections:0.10.2'
-    implementation 'commons-io:commons-io:2.21.0'
+    implementation 'org.yaml:snakeyaml:2.2'
 
     // Development Tools
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
     // Swagger/OpenAPI для документации API
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
-
-    // Для работы с YAML (plugin.yaml)
-    implementation 'org.yaml:snakeyaml:2.2'
-
-    // Убедитесь, что есть эта зависимость для ClassLoader
-    implementation 'org.apache.groovy:groovy:5.0.3'
 }
 
-// Если у вас есть проблемы с JAXB (Java 11+)
-configurations {
-    compileClasspath {
-        extendsFrom configurations.annotationProcessor
+// Задача для копирования плагинов в директорию
+tasks.register('copyPlugins', Copy) {
+    group = 'build'
+    description = 'Копирует собранные плагины в директорию плагинов'
+
+    // ИСКЛЮЧАЕМ зависимости от jar плагинов - это создает цикл
+    // Вместо этого просто копируем из известных мест
+    from "${rootProject.projectDir}/dustybox-plugin-cddb/build/libs"
+    from "${rootProject.projectDir}/dustybox-plugin-script/build/libs"
+
+    // В директорию plugins внутри проекта core
+    into "${projectDir}/plugins"
+
+    include '*.jar'
+
+    // Только если файлы существуют
+    onlyIf {
+        source.any { it.exists() }
     }
-}
-
-// Задача для быстрой сборки и запуска
-tasks.register('dev') {
-    group = 'application'
-    description = 'Разработка: очистка, сборка плагинов, запуск приложения'
-
-    dependsOn ':dustybox-core:clean'
-    dependsOn ':dustybox-core:preparePlugins'
-    dependsOn ':dustybox-core:bootRun'
 
     doLast {
-        println "Приложение запущено в режиме разработки"
-        println "Доступно по адресу: http://localhost:8080"
+        println "Плагины скопированы в: ${destinationDir}"
+        // Показываем, что скопировалось
+        fileTree(destinationDir).matching { include '*.jar' }.each { file ->
+            println "  - ${file.name} (${file.length() / 1024} KB)"
+        }
     }
 }
 
-// Задача для тестирования плагинов
-tasks.register('testPlugins') {
-    group = 'verification'
-    description = 'Тестирование всех плагинов'
+// Задача подготовки плагинов - без зависимостей от jar плагинов
+tasks.register('preparePlugins') {
+    group = 'build'
+    description = 'Подготавливает плагины для запуска'
 
-    dependsOn ':dustybox-plugin-cddb:test'
-    dependsOn ':dustybox-plugin-script:test'
-
+    // Только если плагины существуют
     doLast {
-        println "Тестирование плагинов завершено"
+        def pluginsDir = file("${projectDir}/plugins")
+        if (!pluginsDir.exists()) {
+            pluginsDir.mkdirs()
+            println "Создана директория плагинов: ${pluginsDir}"
+        }
     }
 }
+
+// При запуске приложения сначала подготавливаем плагины
+tasks.named('bootRun') {
+    dependsOn preparePlugins
+    doFirst {
+        println "=" * 50
+        println "Запуск Dustybox"
+        println "Директория плагинов: ${projectDir}/plugins"
+
+        // Проверяем наличие плагинов
+        def pluginsDir = file("${projectDir}/plugins")
+        def plugins = fileTree(pluginsDir).matching { include '*.jar' }
+        println "Найдено плагинов: ${plugins.size()}"
+        plugins.each { println "  - ${it.name}" }
+        println "=" * 50
+    }
+}
+
+// УБИРАЕМ зависимость jar от preparePlugins - это создает цикл
+// tasks.named('jar') {
+//     dependsOn preparePlugins
+// }

@@ -38,29 +38,14 @@ subprojects {
     dependencies {
         implementation 'org.springframework.boot:spring-boot-starter-web'
         implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-        implementation 'org.springframework.boot:spring-boot-starter-security'
-        implementation 'org.springframework.boot:spring-boot-starter-validation'
-        implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
         implementation 'org.postgresql:postgresql'
         implementation "org.apache.groovy:groovy:${groovyVersion}"
-        implementation "org.apache.groovy:groovy-json:${groovyVersion}"
-        implementation "org.apache.groovy:groovy-sql:${groovyVersion}"
         implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
-        implementation 'commons-io:commons-io:2.16.1'
-        implementation 'org.apache.commons:commons-lang3:3.14.0'
-        implementation 'org.thymeleaf.extras:thymeleaf-extras-springsecurity6:3.1.2.RELEASE'
-    }
-
-    tasks.named('test') {
-        useJUnitPlatform()
+        implementation 'org.yaml:snakeyaml:2.2'
     }
 
     tasks.withType(GroovyCompile).configureEach {
         groovyOptions.encoding = 'UTF-8'
-        options.encoding = 'UTF-8'
-    }
-
-    tasks.withType(JavaCompile).configureEach {
         options.encoding = 'UTF-8'
     }
 }
@@ -69,9 +54,6 @@ project(':dustybox-core') {
     apply plugin: 'org.springframework.boot'
 
     dependencies {
-        implementation 'org.reflections:reflections:0.10.2'
-        implementation 'org.apache.commons:commons-lang3:3.20.0'
-        implementation 'commons-io:commons-io:2.21.0'
         developmentOnly 'org.springframework.boot:spring-boot-devtools'
     }
 
@@ -79,39 +61,11 @@ project(':dustybox-core') {
         mainClass = 'com.dustymotors.DustyboxApplication'
         archiveBaseName = 'dustybox-core'
     }
-
-    tasks.named('jar') {
-        enabled = true
-        archiveBaseName = 'dustybox-core'
-    }
-
-    // Задача подготовки плагинов
-    tasks.register('preparePlugins', Copy) {
-        dependsOn ':dustybox-plugin-script:jar'
-        dependsOn ':dustybox-plugin-cddb:jar'
-
-        from project(':dustybox-plugin-script').tasks.named('jar')
-        from project(':dustybox-plugin-cddb').tasks.named('jar')
-        into "${projectDir}/plugins"
-
-        doLast {
-            println "Плагины подготовлены в: ${destinationDir}"
-        }
-    }
-
-    // При запуске приложения сначала подготавливаем плагины
-    tasks.named('bootRun') {
-        dependsOn tasks.named('preparePlugins')
-    }
 }
 
 project(':dustybox-plugin-script') {
     dependencies {
         compileOnly project(':dustybox-core')
-    }
-
-    tasks.named('jar') {
-        archiveBaseName = 'script-plugin'
     }
 }
 
@@ -119,30 +73,37 @@ project(':dustybox-plugin-cddb') {
     dependencies {
         compileOnly project(':dustybox-core')
     }
-
-    tasks.named('jar') {
-        archiveBaseName = 'cddb-plugin'
-    }
 }
 
 // Общие задачи корневого проекта
 tasks.register('buildAllPlugins') {
     group = 'build'
     description = 'Собрать все плагины'
-    dependsOn ':dustybox-core:preparePlugins'
+
+    // Сначала собираем плагины
+    dependsOn ':dustybox-plugin-script:jar'
+    dependsOn ':dustybox-plugin-cddb:jar'
+
+    // Затем копируем их
+    finalizedBy ':dustybox-core:copyPlugins'
 
     doLast {
-        println "Все плагины собраны и готовы к использованию"
+        println "Все плагины собраны и скопированы"
     }
 }
 
 tasks.register('runApp') {
     group = 'application'
-    description = 'Собрать и запустить приложение'
+    description = 'Собрать все плагины и запустить приложение'
+
+    dependsOn buildAllPlugins
     dependsOn ':dustybox-core:bootRun'
 
+    // Сначала собираем плагины, потом запускаем
+    tasks.findByName(':dustybox-core:bootRun').mustRunAfter buildAllPlugins
+
     doLast {
-        println "Приложение успешно запущено!"
+        println "Приложение запущено с плагинами"
     }
 }
 
@@ -159,6 +120,7 @@ tasks.register('cleanPlugins', Delete) {
     }
 }
 
+// При очистке проекта также очищаем плагины
 tasks.named('clean') {
     dependsOn tasks.named('cleanPlugins')
 }
@@ -169,10 +131,28 @@ tasks.register('dev') {
     description = 'Полный цикл разработки: очистка, сборка, запуск'
 
     dependsOn tasks.named('clean')
-    dependsOn tasks.named('buildAllPlugins')
-    finalizedBy tasks.named('runApp')
+    dependsOn tasks.named('runApp')
 
     doLast {
         println "Цикл разработки завершен"
+    }
+}
+
+// Простая задача для проверки плагинов
+tasks.register('checkPlugins') {
+    group = 'verification'
+    description = 'Проверить наличие плагинов'
+
+    doLast {
+        def pluginsDir = file('dustybox-core/plugins')
+        println "Проверка директории плагинов: ${pluginsDir.absolutePath}"
+
+        if (pluginsDir.exists()) {
+            def jars = fileTree(pluginsDir).matching { include '*.jar' }
+            println "Найдено JAR-файлов: ${jars.size()}"
+            jars.each { println "  - ${it.name} (${it.length() / 1024} KB)" }
+        } else {
+            println "Директория плагинов не существует!"
+        }
     }
 }

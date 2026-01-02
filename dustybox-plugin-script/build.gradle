@@ -2,16 +2,15 @@ plugins {
     id 'groovy'
 }
 
-dependencies {
-    // Критически важно: compileOnly, а не implementation
-    compileOnly project(':dustybox-core')
+version = '1.0.0'
 
-    implementation 'org.apache.groovy:groovy:5.0.3'
-    // SLF4J уже в ядре, не дублируем
+dependencies {
+    compileOnly project(':dustybox-core')
 }
 
 jar {
     archiveBaseName = 'script-plugin'
+    archiveVersion = '1.0.0'
 
     from {
         configurations.runtimeClasspath.collect {
@@ -19,12 +18,15 @@ jar {
         }
     }
 
-    // Исключаем классы ядра
     exclude 'com/dustymotors/core/**'
     exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
     into('META-INF/plugins') {
         from 'src/main/resources/plugin.yaml'
+    }
+
+    doLast {
+        println "Собран плагин: ${archiveFileName.get()} (${archiveFile.get().asFile.length() / 1024} KB)"
     }
 }

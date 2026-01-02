@@ -5,7 +5,6 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
-import com.dustymotors.core.repository.SystemLogRepository
 
 @RestController
 @RequestMapping("/api/health")
@@ -13,9 +12,6 @@ class HealthController {
 
     @Autowired
     private JdbcTemplate jdbcTemplate
-
-    @Autowired
-    private SystemLogRepository logRepository
 
     @GetMapping
     Map<String, Object> health() {
@@ -39,17 +35,12 @@ class HealthController {
             ]
         }
 
-        def logCount = logRepository.count()
-
         return [
                 status: "UP",
                 timestamp: new Date(),
                 database: [
                         status: dbStatus,
                         details: dbDetails
-                ],
-                logs: [
-                        totalEntries: logCount
                 ]
         ]
     }
