@@ -4,7 +4,7 @@
 spring.application.name=dustybox-core
 server.port=8080
 
-logging.level.org.springframework.security=TRACE
+spring.mvc.pathmatch.matching-strategy=ANT_PATH_MATCHER
 
 # Database Configuration
 spring.datasource.url=jdbc:postgresql://ubus:5432/dustybox
@@ -65,6 +65,3 @@ spring.jpa.open-in-view=false
 # TEMP! For debug
 logging.level.org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping=trace
 logging.level.org.springframework.web.servlet.handler.SimpleUrlHandlerMapping=debug
-
-# Disable Spring MVC versioning feature that uses ApiVersionConfigurer
-spring.mvc.path-match.matching-strategy=ant_path_matcher

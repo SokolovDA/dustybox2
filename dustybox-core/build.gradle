@@ -10,9 +10,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
-    implementation 'org.springframework.boot:spring-boot-autoconfigure'
 
-    implementation 'org.postgresql:postgresql:42.6.0'
+    implementation 'org.postgresql:postgresql'
 
     // Для аннотаций @PostConstruct, @PreDestroy
     implementation 'jakarta.annotation:jakarta.annotation-api:2.1.1'
@@ -32,9 +31,6 @@ dependencies {
 
     // Для работы с YAML (plugin.yaml)
     implementation 'org.yaml:snakeyaml:2.2'
-
-    // Для работы с YAML
-    // implementation 'org.apache.groovy:groovy-yaml:5.0.3'
 
     // Убедитесь, что есть эта зависимость для ClassLoader
     implementation 'org.apache.groovy:groovy:5.0.3'

@@ -13,13 +13,19 @@ class SecurityConfig {
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .authorizeHttpRequests { authz ->
-                    authz
-                            .anyRequest().permitAll()  // Разрешаем все запросы без аутентификации
-                }
-                .csrf { csrf ->
-                    csrf.disable()  // Отключаем CSRF для разработки
-                }
+                .csrf { csrf -> csrf.disable() }
+                .authorizeHttpRequests { authz -> authz
+                // 1. Самые специфичные правила — ВВЕРХУ
+                        .requestMatchers("/", "/test-plugins").permitAll()
+                        .requestMatchers("/api/plugins/**").permitAll() // Правило для API плагинов
+                        .requestMatchers("/plugins/**").permitAll()     // Правило для других путей плагинов
+                // 2. Более общие правила — ВНИЗУ
+                        .requestMatchers("/api/**").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/api-docs/**", "/v3/api-docs/**").permitAll()
+                        .anyRequest().authenticated()
+                }        // 3. Новый синтаксис для отключения formLogin и httpBasic
+                .formLogin { form -> form.disable() }
+                .httpBasic { basic -> basic.disable() }
 
         return http.build()
     }

@@ -1,9 +1,9 @@
+// dustybox-core/src/main/groovy/com/dustymotors/core/plugin/PluginManager.groovy
 package com.dustymotors.core.plugin
 
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationContext
-import org.springframework.context.support.GenericApplicationContext
 import org.springframework.stereotype.Component
 import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean
@@ -24,6 +24,7 @@ import java.io.FileFilter
 import java.io.InputStream
 import java.util.jar.JarFile
 import java.util.zip.ZipEntry
+import org.springframework.context.ConfigurableApplicationContext
 
 @Component
 @CompileStatic
@@ -52,6 +53,9 @@ class PluginManager {
 
     @Autowired
     private WebUIManager webUIManager
+
+    @Autowired
+    private PluginControllerRegistry controllerRegistry
 
     @Autowired(required = false)
     private DataSource dataSource
@@ -89,6 +93,7 @@ class PluginManager {
         for (PluginInstance plugin in loadedPlugins.values()) {
             try {
                 plugin.stop()
+                unregisterPluginControllers(plugin.id)
                 logInfo("PluginManager", "Stopped plugin: ${plugin.id}")
             } catch (Exception e) {
                 logError("PluginManager", "Error stopping plugin ${plugin.id}: ${e.message}", e)
@@ -167,10 +172,6 @@ class PluginManager {
             // 6. Создаём PluginContext (API ядра для плагина)
             PluginContext pluginContext = createPluginContext(pluginId, pluginSpringContext)
 
-            registerPluginBeans(pluginContainer)
-
-            registerPluginControllers(pluginSpringContext, descriptor)
-
             // 7. Загружаем главный класс плагина и создаём экземпляр
             DustyboxPlugin pluginInstance = createPluginInstance(descriptor, pluginClassLoader)
 
@@ -185,14 +186,20 @@ class PluginManager {
                     jarFile
             )
 
-            // 9. Инициализируем метрики
+            // 9. Регистрируем бины плагина
+            registerPluginBeans(pluginContainer)
+
+            // 10. Инициализируем метрики
             pluginMetrics[pluginId] = new PluginMetrics()
 
-            // 10. Регистрируем плагин в менеджере
+            // 11. Регистрируем плагин в менеджере
             loadedPlugins[pluginId] = pluginContainer
 
-            // 11. Инициализируем плагин
+            // 12. Инициализируем плагин
             initializePlugin(pluginContainer)
+
+            // 13. Регистрируем контроллеры плагина
+            registerPluginControllers(pluginContainer)
 
             logInfo("PluginManager", "Successfully loaded plugin: ${descriptor.name} v${descriptor.version}")
 
@@ -206,20 +213,51 @@ class PluginManager {
         }
     }
 
+    /**
+     * Регистрирует контроллеры плагина
+     */
+    private void registerPluginControllers(PluginInstance pluginContainer) {
+        try {
+            controllerRegistry.registerPluginControllers(pluginContainer.id, pluginContainer)
+            logInfo("PluginManager", "Registered controllers for plugin: ${pluginContainer.id}")
+        } catch (Exception e) {
+            logWarn("PluginManager", "Failed to register controllers for plugin ${pluginContainer.id}: ${e.message}")
+        }
+    }
+
+    /**
+     * Удаляет регистрацию контроллеров плагина
+     */
+    private void unregisterPluginControllers(String pluginId) {
+        try {
+            controllerRegistry.unregisterPluginControllers(pluginId)
+            logInfo("PluginManager", "Unregistered controllers for plugin: ${pluginId}")
+        } catch (Exception e) {
+            logWarn("PluginManager", "Failed to unregister controllers for plugin ${pluginId}: ${e.message}")
+        }
+    }
+
     private void registerPluginBeans(PluginInstance pluginContainer) {
         try {
             def pluginContext = pluginContainer.springContext
             if (!pluginContext) return
 
-            // Получаем DataSource из основного контекста и регистрируем в контексте плагина
-            def dataSource = mainApplicationContext.getBean(javax.sql.DataSource.class)
-            pluginContext.beanFactory.registerSingleton("dataSource", dataSource)
+            // Приводим к ConfigurableApplicationContext для доступа к beanFactory
+            if (pluginContext instanceof ConfigurableApplicationContext) {
+                ConfigurableApplicationContext configurableContext = (ConfigurableApplicationContext) pluginContext
 
-            // Регистрируем JdbcTemplate
-            def jdbcTemplate = new org.springframework.jdbc.core.JdbcTemplate(dataSource)
-            pluginContext.beanFactory.registerSingleton("jdbcTemplate", jdbcTemplate)
+                // Получаем DataSource из основного контекста и регистрируем в контексте плагина
+                def dataSource = mainApplicationContext.getBean(DataSource.class)
+                configurableContext.beanFactory.registerSingleton("dataSource", dataSource)
 
-            logInfo("PluginManager", "Registered dataSource and jdbcTemplate for plugin: ${pluginContainer.id}")
+                // Регистрируем JdbcTemplate
+                def jdbcTemplate = new org.springframework.jdbc.core.JdbcTemplate(dataSource)
+                configurableContext.beanFactory.registerSingleton("jdbcTemplate", jdbcTemplate)
+
+                logInfo("PluginManager", "Registered dataSource and jdbcTemplate for plugin: ${pluginContainer.id}")
+            } else {
+                logWarn("PluginManager", "Plugin context is not configurable, cannot register beans")
+            }
 
         } catch (Exception e) {
             logWarn("PluginManager", "Failed to register beans for plugin ${pluginContainer.id}: ${e.message}")
@@ -296,7 +334,6 @@ class PluginManager {
     /**
      * Создаёт дочерний Spring ApplicationContext для плагина
      */
-// В PluginManager.groovy исправляем метод createPluginSpringContext:
     private ApplicationContext createPluginSpringContext(ClassLoader pluginClassLoader, PluginDescriptor descriptor) {
         logInfo("PluginManager", "Creating Spring context for plugin: ${descriptor.name}")
 
@@ -330,12 +367,20 @@ class PluginManager {
                 logWarn("PluginManager", "Failed to scan package: ${e.message}")
             }
 
+            // 3. Настраиваем JPA для плагина (если есть сущности)
+            try {
+                configurePluginJpa(context, descriptor)
+            } catch (Exception e) {
+                logWarn("PluginManager", "Failed to configure JPA for plugin: ${e.message}")
+            }
+
             context.refresh()
 
             // Логируем все бины в контексте плагина
             logInfo("PluginManager", "Plugin '${descriptor.name}' Spring context created")
-            logInfo("PluginManager", "Beans in plugin context (${context.beanDefinitionNames.length}):")
-            context.beanDefinitionNames.each { beanName ->
+            def beanNames = context.beanDefinitionNames
+            logInfo("PluginManager", "Beans in plugin context (${beanNames.length}):")
+            beanNames.each { beanName ->
                 try {
                     def bean = context.getBean(beanName)
                     logInfo("PluginManager", "  - ${beanName}: ${bean.getClass().name}")
@@ -351,32 +396,6 @@ class PluginManager {
         }
     }
 
-    private void registerPluginControllers(ApplicationContext pluginContext, PluginDescriptor descriptor) {
-        try {
-            logInfo("PluginManager", "Registering controllers for plugin: ${descriptor.name}")
-
-            // Получаем все контроллеры из контекста плагина
-            def controllerBeans = pluginContext.getBeansWithAnnotation(org.springframework.stereotype.Controller.class)
-            controllerBeans.putAll(pluginContext.getBeansWithAnnotation(org.springframework.web.bind.annotation.RestController.class))
-
-            logInfo("PluginManager", "Found ${controllerBeans.size()} controllers in plugin ${descriptor.name}")
-
-            // Для каждого контроллера логируем информацию
-            controllerBeans.each { beanName, bean ->
-                def methods = bean.class.declaredMethods.findAll { method ->
-                    method.annotations.any { ann ->
-                        ann.annotationType().simpleName in ['GetMapping', 'PostMapping', 'PutMapping', 'DeleteMapping', 'RequestMapping']
-                    }
-                }
-
-                logInfo("PluginManager", "  - ${bean.class.simpleName} with ${methods.size()} endpoint methods")
-            }
-
-        } catch (Exception e) {
-            logWarn("PluginManager", "Failed to register plugin controllers: ${e.message}")
-        }
-    }
-
     private void configurePluginJpa(AnnotationConfigApplicationContext context, PluginDescriptor descriptor) {
         // Создаем DataSource для плагина (используем общий)
         def dataSource = mainApplicationContext.getBean(DataSource.class)
@@ -385,7 +404,12 @@ class PluginManager {
         // Создаем EntityManagerFactory для плагина
         def emf = new LocalContainerEntityManagerFactoryBean()
         emf.dataSource = dataSource
-        emf.packagesToScan = [descriptor.mainClass.substring(0, descriptor.mainClass.lastIndexOf('.'))]
+        try {
+            String pluginPackage = descriptor.mainClass.substring(0, descriptor.mainClass.lastIndexOf('.'))
+            emf.packagesToScan = [pluginPackage]
+        } catch (Exception e) {
+            logWarn("PluginManager", "Could not determine package for JPA scanning: ${e.message}")
+        }
         emf.persistenceUnitName = "${descriptor.name}-PU"
 
         def vendorAdapter = new HibernateJpaVendorAdapter()
@@ -403,7 +427,7 @@ class PluginManager {
         context.beanFactory.registerSingleton("entityManagerFactory", emf.object)
 
         // Создаем TransactionManager
-        def txManager = new org.springframework.orm.jpa.JpaTransactionManager()
+        def txManager = new JpaTransactionManager()
         txManager.entityManagerFactory = emf.object
         context.beanFactory.registerSingleton("transactionManager", txManager)
     }
@@ -505,6 +529,7 @@ class PluginManager {
 
         try {
             plugin.stop()
+            unregisterPluginControllers(pluginId)
 
             logInfo("PluginManager", "Stopped plugin: ${pluginId}")
 
