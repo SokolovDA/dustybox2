@@ -15,15 +15,26 @@ class SecurityConfig {
         http
                 .csrf { csrf -> csrf.disable() }
                 .authorizeHttpRequests { authz -> authz
-                // 1. Самые специфичные правила — ВВЕРХУ
-                        .requestMatchers("/", "/test-plugins").permitAll()
-                        .requestMatchers("/api/plugins/**").permitAll() // Правило для API плагинов
-                        .requestMatchers("/plugins/**").permitAll()     // Правило для других путей плагинов
-                // 2. Более общие правила — ВНИЗУ
-                        .requestMatchers("/api/**").permitAll()
+                // Основные пути
+                        .requestMatchers("/", "/health").permitAll()
+
+                // API ядра
+                        .requestMatchers("/api/health").permitAll()
+                        .requestMatchers("/api/system/**").permitAll()
+                        .requestMatchers("/api/plugins/**").permitAll()
+
+                // Плагины
+                        .requestMatchers("/plugins/**").permitAll()
+
+                // CDDB API (через прокси)
+                        .requestMatchers("/api/disks/**").permitAll()
+
+                // Swagger
                         .requestMatchers("/swagger-ui/**", "/api-docs/**", "/v3/api-docs/**").permitAll()
+
+                // Остальные запросы требуют аутентификации
                         .anyRequest().authenticated()
-                }        // 3. Новый синтаксис для отключения formLogin и httpBasic
+                }
                 .formLogin { form -> form.disable() }
                 .httpBasic { basic -> basic.disable() }
 
