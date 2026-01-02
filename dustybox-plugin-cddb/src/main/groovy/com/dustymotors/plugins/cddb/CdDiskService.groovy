@@ -1,34 +1,25 @@
+// dustybox-plugin-cddb/src/main/groovy/com/dustymotors/plugins/cddb/CdDiskService.groovy
 package com.dustymotors.plugins.cddb
 
 import groovy.transform.CompileStatic
-import jakarta.annotation.PostConstruct
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
+import org.springframework.jdbc.core.JdbcTemplate
+import org.springframework.jdbc.core.RowMapper
 import com.dustymotors.core.ScriptAccessible
 import groovy.util.logging.Slf4j
-import jakarta.persistence.*
+import jakarta.annotation.PostConstruct
+import java.sql.ResultSet
+import java.sql.SQLException
 
-// Сущность JPA
-@Entity
-@Table(name = "cd_disks")
+// Простая модель данных без JPA аннотаций
 @CompileStatic
 class CdDisk {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     Long id
-
-    @Column(nullable = false)
     String title
-
-    @Column(nullable = false)
     String artist
-
-    @Column
     Integer year
-
-    @Column(name = "created_at")
-    java.time.LocalDateTime createdAt = java.time.LocalDateTime.now()
+    java.time.LocalDateTime createdAt
 
     CdDisk() {}
 
@@ -39,77 +30,139 @@ class CdDisk {
     }
 }
 
-// Spring Data JPA репозиторий
-interface CdDiskRepository extends org.springframework.data.jpa.repository.JpaRepository<CdDisk, Long> {
-    List<CdDisk> findByArtistContainingIgnoreCase(String artist)
-    List<CdDisk> findByYearBetween(Integer startYear, Integer endYear)
-    List<CdDisk> findByTitleContainingIgnoreCase(String title)
-    long count()
+// RowMapper для преобразования ResultSet в CdDisk
+@CompileStatic
+class CdDiskRowMapper implements RowMapper<CdDisk> {
+    @Override
+    CdDisk mapRow(ResultSet rs, int rowNum) throws SQLException {
+        CdDisk disk = new CdDisk()
+        disk.id = rs.getLong("id")
+        disk.title = rs.getString("title")
+        disk.artist = rs.getString("artist")
+        disk.year = rs.getObject("year") as Integer
+        def timestamp = rs.getTimestamp("created_at")
+        if (timestamp != null) {
+            disk.createdAt = timestamp.toLocalDateTime()
+        }
+        return disk
+    }
 }
 
-// Сервис с транзакциями
 @Slf4j
 @Service
-@Transactional
 @ScriptAccessible
 @CompileStatic
 class CdDiskService {
 
     @Autowired
-    private CdDiskRepository repository
+    private JdbcTemplate jdbcTemplate
 
     @PostConstruct
     void init() {
-        log.info("CdDiskService initialized")
+        log.info("CdDiskService initialized with JDBC")
+        // Проверяем и создаем таблицу если не существует
+        try {
+            jdbcTemplate.execute("""
+                CREATE TABLE IF NOT EXISTS cd_disks (
+                    id BIGSERIAL PRIMARY KEY,
+                    title VARCHAR(255) NOT NULL,
+                    artist VARCHAR(255) NOT NULL,
+                    year INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            log.info("CD disks table ready")
+        } catch (Exception e) {
+            log.error("Failed to create cd_disks table: {}", e.message, e)
+        }
     }
 
     // Основные CRUD операции
     CdDisk save(CdDisk disk) {
-        return repository.save(disk)
+        if (disk.id == null) {
+            // Insert
+            def id = jdbcTemplate.queryForObject("""
+                INSERT INTO cd_disks (title, artist, year) 
+                VALUES (?, ?, ?) 
+                RETURNING id
+            """, Long.class, disk.title, disk.artist, disk.year)
+            disk.id = id
+        } else {
+            // Update
+            jdbcTemplate.update("""
+                UPDATE cd_disks 
+                SET title = ?, artist = ?, year = ? 
+                WHERE id = ?
+            """, disk.title, disk.artist, disk.year, disk.id)
+        }
+        return disk
     }
 
     CdDisk findById(Long id) {
-        return repository.findById(id).orElse(null)
+        try {
+            return jdbcTemplate.queryForObject("""
+                SELECT id, title, artist, year, created_at 
+                FROM cd_disks 
+                WHERE id = ?
+            """, new CdDiskRowMapper(), id)
+        } catch (Exception e) {
+            log.warn("Disk not found with id: {}", id)
+            return null
+        }
     }
 
     List<CdDisk> findAll() {
-        return repository.findAll()
+        return jdbcTemplate.query("""
+            SELECT id, title, artist, year, created_at 
+            FROM cd_disks 
+            ORDER BY id
+        """, new CdDiskRowMapper())
     }
 
     void deleteById(Long id) {
-        repository.deleteById(id)
+        jdbcTemplate.update("DELETE FROM cd_disks WHERE id = ?", id)
     }
 
     // Бизнес-методы
     List<CdDisk> findByArtist(String artist) {
         if (!artist) return []
-        return repository.findByArtistContainingIgnoreCase(artist)
+        return jdbcTemplate.query("""
+            SELECT id, title, artist, year, created_at 
+            FROM cd_disks 
+            WHERE LOWER(artist) LIKE LOWER(?) 
+            ORDER BY artist
+        """, new CdDiskRowMapper(), "%${artist}%")
     }
 
     List<CdDisk> findByYearRange(Integer fromYear, Integer toYear) {
         if (fromYear == null || toYear == null) return []
-        return repository.findByYearBetween(fromYear, toYear)
+        return jdbcTemplate.query("""
+            SELECT id, title, artist, year, created_at 
+            FROM cd_disks 
+            WHERE year BETWEEN ? AND ? 
+            ORDER BY year
+        """, new CdDiskRowMapper(), fromYear, toYear)
     }
 
     List<CdDisk> search(String query) {
         if (!query) return []
 
-        def results = [] as Set<CdDisk>
-        results.addAll(repository.findByTitleContainingIgnoreCase(query))
-        results.addAll(repository.findByArtistContainingIgnoreCase(query))
-
-        try {
-            def year = Integer.parseInt(query)
-            results.addAll(repository.findByYearBetween(year, year))
-        } catch (NumberFormatException e) {
-            // Игнорируем, если query не число
-        }
-
-        return results.toList()
+        return jdbcTemplate.query("""
+            SELECT id, title, artist, year, created_at 
+            FROM cd_disks 
+            WHERE LOWER(title) LIKE LOWER(?) 
+               OR LOWER(artist) LIKE LOWER(?) 
+               OR CAST(year AS TEXT) LIKE ?
+            ORDER BY title
+        """, new CdDiskRowMapper(),
+                "%${query}%", "%${query}%", "%${query}%")
     }
 
     long count() {
-        return repository.count()
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM cd_disks",
+                Long.class
+        ) ?: 0
     }
 
     // Метод для работы со скриптами

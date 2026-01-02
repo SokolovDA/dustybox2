@@ -1,3 +1,4 @@
+// dustybox-core/src/main/groovy/com/dustymotors/DustyboxApplication.groovy
 package com.dustymotors
 
 import org.springframework.boot.SpringApplication
@@ -7,9 +8,6 @@ import jakarta.annotation.PostConstruct
 import com.dustymotors.core.plugin.PluginManager
 
 @SpringBootApplication
-// Временно удаляем - позже настроим через application.properties
-// @EntityScan(basePackages = ["com.dustymotors.core.entity", "com.dustymotors.plugins"])
-// @EnableJpaRepositories(basePackages = ["com.dustymotors.core.repository", "com.dustymotors.plugins"])
 class DustyboxApplication {
 
     @Autowired
@@ -30,8 +28,9 @@ class DustyboxApplication {
         }
         println "=" * 50
         println "Health check: http://localhost:8080/api/health"
-        println "Plugin API test: http://localhost:8080/plugins/ping/cddb-plugin-1.3.0"
-        println "CDDB API: http://localhost:8080/api/plugins/cddb/disks"
+        println "Plugin API test: http://localhost:8080/api/debug/plugins/services"
+        println "CDDB API: http://localhost:8080/api/cddb/disks"
+        println "System info: http://localhost:8080/api/system/info"
         println "=" * 50
     }
 }

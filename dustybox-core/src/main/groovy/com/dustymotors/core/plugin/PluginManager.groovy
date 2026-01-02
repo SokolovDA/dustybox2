@@ -167,6 +167,8 @@ class PluginManager {
             // 6. Создаём PluginContext (API ядра для плагина)
             PluginContext pluginContext = createPluginContext(pluginId, pluginSpringContext)
 
+            registerPluginBeans(pluginContainer)
+
             registerPluginControllers(pluginSpringContext, descriptor)
 
             // 7. Загружаем главный класс плагина и создаём экземпляр
@@ -201,6 +203,26 @@ class PluginManager {
 
             logError("PluginManager", "CRITICAL: Failed to load plugin ${pluginId}: ${e.message}", e)
             throw new PluginLoadingException("Failed to load plugin ${pluginId}: ${e.message}", e)
+        }
+    }
+
+    private void registerPluginBeans(PluginInstance pluginContainer) {
+        try {
+            def pluginContext = pluginContainer.springContext
+            if (!pluginContext) return
+
+            // Получаем DataSource из основного контекста и регистрируем в контексте плагина
+            def dataSource = mainApplicationContext.getBean(javax.sql.DataSource.class)
+            pluginContext.beanFactory.registerSingleton("dataSource", dataSource)
+
+            // Регистрируем JdbcTemplate
+            def jdbcTemplate = new org.springframework.jdbc.core.JdbcTemplate(dataSource)
+            pluginContext.beanFactory.registerSingleton("jdbcTemplate", jdbcTemplate)
+
+            logInfo("PluginManager", "Registered dataSource and jdbcTemplate for plugin: ${pluginContainer.id}")
+
+        } catch (Exception e) {
+            logWarn("PluginManager", "Failed to register beans for plugin ${pluginContainer.id}: ${e.message}")
         }
     }
 

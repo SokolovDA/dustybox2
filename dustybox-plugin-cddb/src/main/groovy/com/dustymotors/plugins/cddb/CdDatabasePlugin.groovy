@@ -38,8 +38,8 @@ class CdDatabasePlugin extends BasePlugin {
             context.registerService("diskService", diskService)
             log.info("Registered service: diskService")
 
-            // Инициализируем данные
-            initializeSampleData(diskService)
+            // Инициализируем тестовые данные
+            initializeSampleData()
 
         } catch (Exception e) {
             log.error("Failed to initialize CD Database Plugin: ${e.message}", e)
@@ -88,7 +88,7 @@ class CdDatabasePlugin extends BasePlugin {
     /**
      * Инициализация тестовых данных
      */
-    private void initializeSampleData(CdDiskService diskService) {
+    private void initializeSampleData() {
         try {
             def count = diskService.count()
             if (count == 0) {
@@ -106,7 +106,6 @@ class CdDatabasePlugin extends BasePlugin {
                 }
 
                 log.info("Initialized ${sampleDisks.size()} sample CDs")
-//                pluginContext.publishEvent("cddb.sampleData.initialized", [count: sampleDisks.size()])
             } else {
                 log.info("Sample data already exists (${count} records)")
             }
