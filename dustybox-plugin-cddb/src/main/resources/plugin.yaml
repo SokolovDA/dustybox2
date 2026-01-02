@@ -2,5 +2,5 @@ name: "cd-database"
 version: "1.3.0"
 description: "Управление базой данных CD дисков"
 mainClass: "com.dustymotors.plugins.cddb.CdDatabasePlugin"
-springConfigClass: "com.dustymotors.plugins.cddb.CddbPluginConfig"
+springConfigClass: "com.dustymotors.plugins.cddb.CddbPluginConfig"  # ЭТО ДОЛЖНО БЫТЬ
 type: "database"

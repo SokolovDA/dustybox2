@@ -1,12 +1,10 @@
+// dustybox-core/src/main/groovy/com/dustymotors/core/plugin/PluginDescriptor.groovy
 package com.dustymotors.core.plugin
 
 import groovy.transform.CompileStatic
 import org.yaml.snakeyaml.Yaml
 import java.util.Map as JMap
 
-/**
- * Мета-информация о плагине, загруженная из plugin.yaml
- */
 @CompileStatic
 class PluginDescriptor {
     String name
@@ -14,11 +12,10 @@ class PluginDescriptor {
     String description
     String mainClass
     String type
+    String springConfigClass // ДОБАВЛЯЕМ ЭТО ПОЛЕ
 
-    // Статический метод для загрузки дескриптора из InputStream
     static PluginDescriptor load(InputStream input) {
         try {
-            // Используем SnakeYAML для парсинга
             Yaml yaml = new Yaml()
             JMap<String, Object> yamlMap = yaml.load(input)
 
@@ -31,7 +28,8 @@ class PluginDescriptor {
                     version: getString(yamlMap, 'version'),
                     description: getString(yamlMap, 'description'),
                     mainClass: getString(yamlMap, 'mainClass'),
-                    type: getString(yamlMap, 'type')
+                    type: getString(yamlMap, 'type'),
+                    springConfigClass: getString(yamlMap, 'springConfigClass') // ДОБАВЛЯЕМ
             )
         } catch (Exception e) {
             throw new PluginLoadingException("Failed to parse plugin.yaml: ${e.message}", e)
@@ -41,13 +39,5 @@ class PluginDescriptor {
     private static String getString(JMap<String, Object> map, String key) {
         Object value = map.get(key)
         return value != null ? value.toString() : null
-    }
-}
-
-// Вспомогательный класс исключения
-@CompileStatic
-class PluginLoadingException extends RuntimeException {
-    PluginLoadingException(String message, Throwable cause = null) {
-        super(message, cause)
     }
 }

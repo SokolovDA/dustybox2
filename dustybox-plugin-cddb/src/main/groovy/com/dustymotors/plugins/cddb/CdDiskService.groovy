@@ -5,7 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import com.dustymotors.core.ScriptAccessible
-
+import groovy.util.logging.Slf4j
 import jakarta.persistence.*
 
 // Сущность JPA
@@ -47,14 +47,20 @@ interface CdDiskRepository extends org.springframework.data.jpa.repository.JpaRe
 }
 
 // Сервис с транзакциями
+@Slf4j
 @Service
 @Transactional
-@ScriptAccessible // Теперь сервис доступен из скриптов!
+@ScriptAccessible
 @CompileStatic
 class CdDiskService {
 
     @Autowired
     private CdDiskRepository repository
+
+    @PostConstruct
+    void init() {
+        log.info("CdDiskService initialized")
+    }
 
     // Основные CRUD операции
     CdDisk save(CdDisk disk) {

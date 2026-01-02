@@ -5,6 +5,10 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.ApplicationContext
 import org.springframework.context.support.GenericApplicationContext
 import org.springframework.stereotype.Component
+import org.springframework.context.annotation.AnnotationConfigApplicationContext
+import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean
+import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter
+import org.springframework.orm.jpa.JpaTransactionManager
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import com.dustymotors.core.entity.SystemLog
@@ -268,25 +272,110 @@ class PluginManager {
     /**
      * Создаёт дочерний Spring ApplicationContext для плагина
      */
+// В PluginManager.groovy исправляем метод createPluginSpringContext:
     private ApplicationContext createPluginSpringContext(ClassLoader pluginClassLoader, PluginDescriptor descriptor) {
         logInfo("PluginManager", "Creating Spring context for plugin: ${descriptor.name}")
 
         try {
-            // Создаём минимальный контекст
-            GenericApplicationContext context = new GenericApplicationContext()
+            // Используем AnnotationConfigApplicationContext для поддержки конфигурации
+            AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()
             context.classLoader = pluginClassLoader
             context.parent = mainApplicationContext // Ключевая строка - делаем дочерним!
 
             // Регистрируем стандартные бины
             context.beanFactory.registerSingleton("pluginDescriptor", descriptor)
 
-            // Просто создаем пустой контекст - компоненты будут найдены автоматически
+            // 1. ПЕРВЫЙ ПРИОРИТЕТ: Если есть springConfigClass, регистрируем его
+            if (descriptor.springConfigClass) {
+                try {
+                    logInfo("PluginManager", "Loading config class: ${descriptor.springConfigClass}")
+                    Class<?> configClass = pluginClassLoader.loadClass(descriptor.springConfigClass)
+                    context.register(configClass)
+                    logInfo("PluginManager", "Registered config class: ${configClass.name}")
+                } catch (ClassNotFoundException e) {
+                    logWarn("PluginManager", "Config class not found: ${descriptor.springConfigClass}")
+                }
+            }
+
+            // 2. ВТОРОЙ ПРИОРИТЕТ: Сканируем пакет плагина
+            try {
+                String pluginPackage = descriptor.mainClass.substring(0, descriptor.mainClass.lastIndexOf('.'))
+                logInfo("PluginManager", "Scanning package: ${pluginPackage}")
+                context.scan(pluginPackage)
+            } catch (Exception e) {
+                logWarn("PluginManager", "Failed to scan package: ${e.message}")
+            }
+
             context.refresh()
+
+            // Логируем все бины в контексте плагина
+            logInfo("PluginManager", "Plugin '${descriptor.name}' Spring context created")
+            logInfo("PluginManager", "Beans in plugin context (${context.beanDefinitionNames.length}):")
+            context.beanDefinitionNames.each { beanName ->
+                try {
+                    def bean = context.getBean(beanName)
+                    logInfo("PluginManager", "  - ${beanName}: ${bean.getClass().name}")
+                } catch (Exception e) {
+                    logInfo("PluginManager", "  - ${beanName}: [ERROR getting bean]")
+                }
+            }
 
             return context
         } catch (Exception e) {
+            logError("PluginManager", "Failed to create Spring context: ${e.message}", e)
             throw new PluginLoadingException("Failed to create Spring context: ${e.message}", e)
         }
+    }
+
+    private void registerPluginControllers(ApplicationContext pluginContext, PluginDescriptor descriptor) {
+        try {
+            // Получаем RequestMappingHandlerMapping из основного контекста
+            def mainHandlerMapping = mainApplicationContext.getBean("requestMappingHandlerMapping")
+
+            // Получаем все контроллеры из контекста плагина
+            def controllerBeans = pluginContext.getBeansWithAnnotation(org.springframework.stereotype.Controller.class)
+            controllerBeans.putAll(pluginContext.getBeansWithAnnotation(org.springframework.web.bind.annotation.RestController.class))
+
+            logInfo("PluginManager", "Found ${controllerBeans.size()} controllers in plugin ${descriptor.name}")
+
+            controllerBeans.each { beanName, bean ->
+                logInfo("PluginManager", "  - Controller: ${bean.class.name}")
+            }
+
+        } catch (Exception e) {
+            logWarn("PluginManager", "Failed to register plugin controllers: ${e.message}")
+        }
+    }
+
+    private void configurePluginJpa(AnnotationConfigApplicationContext context, PluginDescriptor descriptor) {
+        // Создаем DataSource для плагина (используем общий)
+        def dataSource = mainApplicationContext.getBean(DataSource.class)
+        context.beanFactory.registerSingleton("dataSource", dataSource)
+
+        // Создаем EntityManagerFactory для плагина
+        def emf = new LocalContainerEntityManagerFactoryBean()
+        emf.dataSource = dataSource
+        emf.packagesToScan = [descriptor.mainClass.substring(0, descriptor.mainClass.lastIndexOf('.'))]
+        emf.persistenceUnitName = "${descriptor.name}-PU"
+
+        def vendorAdapter = new HibernateJpaVendorAdapter()
+        emf.jpaVendorAdapter = vendorAdapter
+
+        def properties = new Properties()
+        properties.put("hibernate.hbm2ddl.auto", "update")
+        properties.put("hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect")
+        properties.put("hibernate.format_sql", "true")
+        properties.put("hibernate.show_sql", "true")
+
+        emf.setJpaProperties(properties)
+        emf.afterPropertiesSet()
+
+        context.beanFactory.registerSingleton("entityManagerFactory", emf.object)
+
+        // Создаем TransactionManager
+        def txManager = new org.springframework.orm.jpa.JpaTransactionManager()
+        txManager.entityManagerFactory = emf.object
+        context.beanFactory.registerSingleton("transactionManager", txManager)
     }
 
     /**

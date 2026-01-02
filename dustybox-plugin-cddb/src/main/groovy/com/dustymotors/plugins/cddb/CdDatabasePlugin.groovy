@@ -4,24 +4,16 @@ import com.dustymotors.core.plugin.*
 import groovy.transform.CompileStatic
 import groovy.util.logging.Slf4j
 
-import javax.sql.DataSource
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.context.ApplicationContext
-import org.springframework.stereotype.Component
-import org.springframework.transaction.annotation.Transactional
-
 @Slf4j
 @CompileStatic
-@Component
 class CdDatabasePlugin implements DustyboxPlugin {
 
-    // Будет инжектирован из дочернего Spring-контекста плагина
-    @Autowired
-    private CdDiskService cdDiskService
+    // УДАЛИТЕ эту аннотацию @Autowired и поле
+    // @Autowired
+    // private CdDiskService cdDiskService
 
     private PluginContext pluginContext
 
-    // Реализация методов интерфейса DustyboxPlugin
     @Override
     String getName() { "cd-database" }
 
@@ -36,19 +28,37 @@ class CdDatabasePlugin implements DustyboxPlugin {
         log.info("CD Database Plugin initializing...")
         this.pluginContext = context
 
-        // Регистрируем сервис в реестре ядра
-        context.registerService("diskService", cdDiskService)
+        try {
+            // ПОЛУЧАЕМ СЕРВИС ИЗ SPRING КОНТЕКСТА ПЛАГИНА
+            def springContext = context.pluginSpringContext
+            if (springContext == null) {
+                log.error("Plugin Spring Context is NULL!")
+                return
+            }
 
-        // Подписываемся на события ядра
-        context.subscribe("system.start") { Map data ->
-            log.info("System started event received")
-            initializeSampleData()
+            // Получаем CdDiskService из контекста плагина
+            def diskService = springContext.getBean(CdDiskService.class)
+            log.info("Successfully retrieved CdDiskService from plugin context: ${diskService?.getClass()?.name}")
+
+            // Регистрируем сервис в реестре ядра
+            context.registerService("diskService", diskService)
+            log.info("Registered service: cddb.diskService")
+
+            // Подписываемся на события ядра
+            context.subscribe("system.start") { Map data ->
+                log.info("System started event received")
+                initializeSampleData(diskService)
+            }
+
+            // Публикуем событие о готовности
+            context.publishEvent("cddb.ready", [version: version])
+
+            log.info("CD Database Plugin initialized successfully")
+
+        } catch (Exception e) {
+            log.error("Failed to initialize CD Database Plugin: ${e.message}", e)
+            throw e
         }
-
-        // Публикуем событие о готовности
-        context.publishEvent("cddb.ready", [version: version])
-
-        log.info("CD Database Plugin initialized. Registered service: cddb.diskService")
     }
 
     @Override
@@ -62,10 +72,6 @@ class CdDatabasePlugin implements DustyboxPlugin {
         log.info("CD Database Plugin stopping...")
         println "CD Database Plugin stopped"
     }
-
-    // Метод getEndpoints() больше не нужен - эндпоинты через @RestController
-    // Удалите его полностью или оставьте пустую реализацию:
-    // List<PluginEndpoint> getEndpoints() { return [] }
 
     @Override
     List<PluginMenuItem> getMenuItems() {
@@ -94,12 +100,11 @@ class CdDatabasePlugin implements DustyboxPlugin {
     }
 
     /**
-     * Инициализация тестовых данных (выполняется после старта системы)
+     * Инициализация тестовых данных
      */
-    @Transactional
-    private void initializeSampleData() {
+    private void initializeSampleData(CdDiskService diskService) {
         try {
-            def count = cdDiskService.count()
+            def count = diskService.count()
             if (count == 0) {
                 log.info("Initializing sample CD data...")
                 def sampleDisks = [
@@ -111,11 +116,13 @@ class CdDatabasePlugin implements DustyboxPlugin {
                 ]
 
                 sampleDisks.each { disk ->
-                    cdDiskService.save(disk)
+                    diskService.save(disk)
                 }
 
                 log.info("Initialized ${sampleDisks.size()} sample CDs")
                 pluginContext.publishEvent("cddb.sampleData.initialized", [count: sampleDisks.size()])
+            } else {
+                log.info("Sample data already exists (${count} records)")
             }
         } catch (Exception e) {
             log.error("Failed to initialize sample data: ${e.message}", e)
