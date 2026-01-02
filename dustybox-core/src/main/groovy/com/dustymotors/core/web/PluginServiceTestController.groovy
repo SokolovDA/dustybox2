@@ -229,4 +229,47 @@ class PluginServiceTestController {
                 plugins: plugins.sort { it.id }
         ]
     }
+
+    @GetMapping("/{pluginId}/services/detailed")
+    Map<String, Object> getPluginServicesDetailed(@PathVariable String pluginId) {
+        def plugin = pluginManager.getPlugin(pluginId)
+        if (!plugin) {
+            return [error: "Plugin not found: ${pluginId}"]
+        }
+
+        def result = [
+                pluginId: pluginId,
+                name: plugin.descriptor.name,
+                version: plugin.descriptor.version,
+                started: plugin.started,
+                timestamp: new Date()
+        ]
+
+        // Проверяем Spring контекст
+        if (plugin.springContext) {
+            def beanNames = plugin.springContext.beanDefinitionNames
+            result["springContextBeans"] = beanNames.length
+            result["springBeanNames"] = beanNames.take(10) // Первые 10 бинов
+
+            // Ищем сервисы
+            def services = beanNames.findAll { it.contains("Service") }
+            result["serviceBeans"] = services
+        }
+
+        // Проверяем реестр сервисов
+        if (plugin.pluginContext) {
+            // Пытаемся получить сервисы через контекст
+            try {
+                def diskService = plugin.pluginContext.getService("diskService")
+                result["diskServiceAvailable"] = diskService != null
+                if (diskService) {
+                    result["diskServiceMethods"] = diskService.class.declaredMethods.collect { it.name }
+                }
+            } catch (Exception e) {
+                result["serviceError"] = e.message
+            }
+        }
+
+        return result
+    }
 }

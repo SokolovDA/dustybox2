@@ -167,6 +167,8 @@ class PluginManager {
             // 6. Создаём PluginContext (API ядра для плагина)
             PluginContext pluginContext = createPluginContext(pluginId, pluginSpringContext)
 
+            registerPluginControllers(pluginSpringContext, descriptor)
+
             // 7. Загружаем главный класс плагина и создаём экземпляр
             DustyboxPlugin pluginInstance = createPluginInstance(descriptor, pluginClassLoader)
 
@@ -329,8 +331,7 @@ class PluginManager {
 
     private void registerPluginControllers(ApplicationContext pluginContext, PluginDescriptor descriptor) {
         try {
-            // Получаем RequestMappingHandlerMapping из основного контекста
-            def mainHandlerMapping = mainApplicationContext.getBean("requestMappingHandlerMapping")
+            logInfo("PluginManager", "Registering controllers for plugin: ${descriptor.name}")
 
             // Получаем все контроллеры из контекста плагина
             def controllerBeans = pluginContext.getBeansWithAnnotation(org.springframework.stereotype.Controller.class)
@@ -338,8 +339,15 @@ class PluginManager {
 
             logInfo("PluginManager", "Found ${controllerBeans.size()} controllers in plugin ${descriptor.name}")
 
+            // Для каждого контроллера логируем информацию
             controllerBeans.each { beanName, bean ->
-                logInfo("PluginManager", "  - Controller: ${bean.class.name}")
+                def methods = bean.class.declaredMethods.findAll { method ->
+                    method.annotations.any { ann ->
+                        ann.annotationType().simpleName in ['GetMapping', 'PostMapping', 'PutMapping', 'DeleteMapping', 'RequestMapping']
+                    }
+                }
+
+                logInfo("PluginManager", "  - ${bean.class.simpleName} with ${methods.size()} endpoint methods")
             }
 
         } catch (Exception e) {
@@ -851,6 +859,17 @@ class PluginValidator {
 @CompileStatic
 class PluginValidationException extends PluginLoadingException {
     PluginValidationException(String message, Throwable cause = null) {
+        super(message, cause)
+    }
+}
+
+@CompileStatic
+class PluginLoadingException extends RuntimeException {
+    PluginLoadingException(String message) {
+        super(message)
+    }
+
+    PluginLoadingException(String message, Throwable cause) {
         super(message, cause)
     }
 }

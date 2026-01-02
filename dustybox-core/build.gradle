@@ -46,3 +46,31 @@ configurations {
         extendsFrom configurations.annotationProcessor
     }
 }
+
+// Задача для быстрой сборки и запуска
+tasks.register('dev') {
+    group = 'application'
+    description = 'Разработка: очистка, сборка плагинов, запуск приложения'
+
+    dependsOn ':dustybox-core:clean'
+    dependsOn ':dustybox-core:preparePlugins'
+    dependsOn ':dustybox-core:bootRun'
+
+    doLast {
+        println "Приложение запущено в режиме разработки"
+        println "Доступно по адресу: http://localhost:8080"
+    }
+}
+
+// Задача для тестирования плагинов
+tasks.register('testPlugins') {
+    group = 'verification'
+    description = 'Тестирование всех плагинов'
+
+    dependsOn ':dustybox-plugin-cddb:test'
+    dependsOn ':dustybox-plugin-script:test'
+
+    doLast {
+        println "Тестирование плагинов завершено"
+    }
+}
