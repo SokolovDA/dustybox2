@@ -22,7 +22,7 @@ class PluginManager {
     @Value('${dustybox.plugins.dir:./plugins}')
     private String pluginsDir
 
-    private Map<String, PluginInstance> loadedPlugins = [:]
+    private Map<String, PluginInstance> loadedPlugins = [:] // Key: stable plugin ID (without version)
 
     @Autowired
     private ApplicationContext mainApplicationContext
@@ -79,15 +79,6 @@ class PluginManager {
     }
 
     void loadPlugin(File jarFile) {
-        String pluginId = jarFile.name.replace('.jar', '')
-
-        if (loadedPlugins.containsKey(pluginId)) {
-            println "[WARN] Plugin ${pluginId} is already loaded. Skipping."
-            return
-        }
-
-        println "[INFO] Loading plugin: ${pluginId}"
-
         try {
             // Создаём ClassLoader для плагина
             URL[] urls = [jarFile.toURI().toURL()] as URL[]
@@ -96,10 +87,15 @@ class PluginManager {
             // Загружаем дескриптор plugin.yaml
             PluginDescriptor descriptor = loadPluginDescriptor(jarFile)
 
-            // Убедимся, что плагин валиден
-            if (!descriptor.mainClass) {
-                throw new PluginLoadingException("Plugin descriptor missing mainClass")
+            // Используем стабильный ID плагина (без версии)
+            String stablePluginId = createStablePluginId(descriptor.name)
+
+            if (loadedPlugins.containsKey(stablePluginId)) {
+                println "[WARN] Plugin with stable ID ${stablePluginId} is already loaded. Skipping."
+                return
             }
+
+            println "[INFO] Loading plugin: ${stablePluginId} (${descriptor.name} v${descriptor.version})"
 
             // Создаём Spring-контекст для плагина
             ApplicationContext pluginSpringContext = createPluginSpringContext(pluginClassLoader, descriptor)
@@ -111,13 +107,13 @@ class PluginManager {
             // Создаём PluginContext
             PluginContext pluginContext = new PluginContext(
                     dataSource: dataSource,
-                    pluginId: pluginId,
+                    pluginId: stablePluginId,
                     pluginSpringContext: pluginSpringContext
             )
 
             // Создаём контейнер PluginInstance
             PluginInstance pluginContainer = new PluginInstance(
-                    pluginId,
+                    stablePluginId,
                     descriptor,
                     pluginClassLoader,
                     pluginInstance,
@@ -126,22 +122,56 @@ class PluginManager {
                     jarFile
             )
 
-            // Инициализируем плагин (без вызова методов, которые могут вызывать ClassLoader проблемы)
+            // Инициализируем плагин
             println "[INFO] Initializing plugin: ${descriptor.name}"
             pluginInstance.initialize(pluginContext)
 
             // Регистрируем плагин
-            loadedPlugins[pluginId] = pluginContainer
+            loadedPlugins[stablePluginId] = pluginContainer
 
             // Запускаем плагин
             pluginContainer.start()
 
-            println "[SUCCESS] Loaded plugin: ${descriptor.name} v${descriptor.version}"
+            println "[SUCCESS] Loaded plugin: ${descriptor.name} v${descriptor.version} (stable ID: ${stablePluginId})"
 
         } catch (Exception e) {
             println "[ERROR] Failed to load plugin ${jarFile.name}: ${e.message}"
             e.printStackTrace()
             throw e
+        }
+    }
+
+    void reloadPlugin(String pluginId) {
+        PluginInstance plugin = getPlugin(pluginId)
+        if (!plugin) {
+            throw new PluginLoadingException("Plugin not found: ${pluginId}")
+        }
+
+        println "[INFO] Reloading plugin: ${pluginId}"
+
+        try {
+            // Останавливаем плагин
+            if (plugin.started) {
+                stopPlugin(pluginId)
+            }
+
+            // Сохраняем информацию о JAR файле
+            File jarFile = plugin.jarFile
+
+            // Удаляем из хранилища
+            loadedPlugins.remove(pluginId)
+
+            // Закрываем ClassLoader
+            plugin.classLoader.close()
+
+            // Загружаем заново
+            loadPlugin(jarFile)
+
+            println "[SUCCESS] Plugin ${pluginId} reloaded"
+
+        } catch (Exception e) {
+            println "[ERROR] Failed to reload plugin ${pluginId}: ${e.message}"
+            throw new PluginLoadingException("Failed to reload plugin ${pluginId}", e)
         }
     }
 
@@ -167,6 +197,18 @@ class PluginManager {
         } finally {
             jar?.close()
         }
+    }
+
+    private String createStablePluginId(String pluginName) {
+        // Преобразуем имя плагина в стабильный ID
+        // Например: "cd-database" -> "cddb", "script-manager" -> "script"
+        String stableId = pluginName.toLowerCase()
+                .replace('-database', 'db')
+                .replace('-manager', '')
+                .replace('-plugin', '')
+                .replace('-', '')
+
+        return stableId
     }
 
     private ApplicationContext createPluginSpringContext(ClassLoader pluginClassLoader, PluginDescriptor descriptor) {
@@ -230,40 +272,6 @@ class PluginManager {
 
         if (plugin.started) {
             plugin.stop()
-        }
-    }
-
-    void reloadPlugin(String pluginId) {
-        PluginInstance plugin = getPlugin(pluginId)
-        if (!plugin) {
-            throw new PluginLoadingException("Plugin not found: ${pluginId}")
-        }
-
-        println "[INFO] Reloading plugin: ${pluginId}"
-
-        try {
-            // Останавливаем плагин
-            if (plugin.started) {
-                stopPlugin(pluginId)
-            }
-
-            // Сохраняем информацию о JAR файле
-            File jarFile = plugin.jarFile
-
-            // Удаляем из хранилища
-            loadedPlugins.remove(pluginId)
-
-            // Закрываем ClassLoader
-            plugin.classLoader.close()
-
-            // Загружаем заново
-            loadPlugin(jarFile)
-
-            println "[SUCCESS] Plugin ${pluginId} reloaded"
-
-        } catch (Exception e) {
-            println "[ERROR] Failed to reload plugin ${pluginId}: ${e.message}"
-            throw new PluginLoadingException("Failed to reload plugin ${pluginId}", e)
         }
     }
 }

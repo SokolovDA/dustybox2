@@ -39,6 +39,30 @@ class PluginContext {
         return null
     }
 
+    // Получить бин по имени и классу
+    <T> T getBean(String name, Class<T> requiredType) {
+        if (pluginSpringContext != null) {
+            try {
+                return pluginSpringContext.getBean(name, requiredType)
+            } catch (Exception e) {
+                return null
+            }
+        }
+        return null
+    }
+
+    // Получить бин по классу
+    <T> T getBean(Class<T> requiredType) {
+        if (pluginSpringContext != null) {
+            try {
+                return pluginSpringContext.getBean(requiredType)
+            } catch (Exception e) {
+                return null
+            }
+        }
+        return null
+    }
+
     // Метод для регистрации бинов (если нужно)
     void registerBean(String name, Object bean) {
         // Эта функциональность может быть добавлена позже

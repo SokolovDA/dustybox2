@@ -1,4 +1,3 @@
-// dustybox-core/src/main/groovy/com/dustymotors/core/plugin/PluginDescriptor.groovy
 package com.dustymotors.core.plugin
 
 import groovy.transform.CompileStatic
@@ -12,7 +11,7 @@ class PluginDescriptor {
     String description
     String mainClass
     String type
-    String springConfigClass // ДОБАВЛЯЕМ ЭТО ПОЛЕ
+    String springConfigClass
 
     static PluginDescriptor load(InputStream input) {
         try {
@@ -29,7 +28,7 @@ class PluginDescriptor {
                     description: getString(yamlMap, 'description'),
                     mainClass: getString(yamlMap, 'mainClass'),
                     type: getString(yamlMap, 'type'),
-                    springConfigClass: getString(yamlMap, 'springConfigClass') // ДОБАВЛЯЕМ
+                    springConfigClass: getString(yamlMap, 'springConfigClass')
             )
         } catch (Exception e) {
             throw new PluginLoadingException("Failed to parse plugin.yaml: ${e.message}", e)

@@ -6,10 +6,7 @@ import org.springframework.http.*
 import org.springframework.web.bind.annotation.*
 import com.dustymotors.core.plugin.PluginManager
 import com.dustymotors.core.plugin.PluginInstance
-import org.springframework.web.servlet.HandlerMapping
-import org.springframework.web.method.HandlerMethod
-import org.springframework.web.servlet.mvc.method.RequestMappingInfo
-import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping
+import java.lang.reflect.Method
 
 @RestController
 class PluginDispatcherController {
@@ -28,7 +25,8 @@ class PluginDispatcherController {
         PluginInstance plugin = pluginManager.getPlugin(pluginId)
         if (!plugin) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body([error: "Plugin not found: ${pluginId}"])
+                    .body([error: "Plugin not found: ${pluginId}",
+                           availablePlugins: pluginManager.loadedPlugins.keySet()])
         }
 
         try {
@@ -39,17 +37,8 @@ class PluginDispatcherController {
                         .body([error: "Plugin ${pluginId} has no Spring context"])
             }
 
-            // Ищем обработчик в контексте плагина
-            def handlerMapping = springContext.getBean(RequestMappingHandlerMapping.class)
-            def handlerMethod = handlerMapping.getHandler(request)
-
-            if (handlerMethod != null) {
-                // Исполняем обработчик
-                return executeHandlerMethod(springContext, handlerMethod, request)
-            } else {
-                // Если обработчик не найден, возвращаем информацию о доступных API
-                return ResponseEntity.ok(getPluginApiInfo(plugin, request))
-            }
+            // Используем рефлексию для доступа к сервису плагина
+            return handlePluginRequest(pluginId, springContext, request)
 
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -58,21 +47,59 @@ class PluginDispatcherController {
     }
 
     /**
+     * Обработка запросов к плагину через рефлексию
+     */
+    private ResponseEntity<?> handlePluginRequest(String pluginId, def springContext, HttpServletRequest request) {
+        try {
+            if (pluginId == "cddb") {
+                // Получаем CdDiskService через рефлексию
+                ClassLoader pluginClassLoader = springContext.getClassLoader()
+                Class<?> cdDiskServiceClass = pluginClassLoader.loadClass("com.dustymotors.plugins.cddb.CdDiskService")
+                def diskService = springContext.getBean(cdDiskServiceClass)
+
+                def path = request.requestURI
+                def method = request.method
+
+                if (path.endsWith("/api/disks") && method == "GET") {
+                    // Вызываем метод findAll
+                    Method findAllMethod = cdDiskServiceClass.getMethod("findAll")
+                    def result = findAllMethod.invoke(diskService)
+                    return ResponseEntity.ok(result)
+
+                } else if (path.endsWith("/api/disks/count") && method == "GET") {
+                    // Вызываем метод count
+                    Method countMethod = cdDiskServiceClass.getMethod("count")
+                    def count = countMethod.invoke(diskService)
+                    return ResponseEntity.ok([count: count])
+
+                } else if (path.endsWith("/api/disks/health") && method == "GET") {
+                    // Вызываем метод count для health check
+                    Method countMethod = cdDiskServiceClass.getMethod("count")
+                    def count = countMethod.invoke(diskService)
+                    return ResponseEntity.ok([
+                            status: "UP",
+                            service: "CdDiskService",
+                            diskCount: count,
+                            timestamp: new Date()
+                    ])
+                }
+            }
+
+            // Если не нашли подходящий обработчик
+            return ResponseEntity.ok(getPluginApiInfo(pluginId, request.requestURI))
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body([error: "Handler execution failed: ${e.message}"])
+        }
+    }
+
+    /**
      * Прямой доступ к CDDB API (для обратной совместимости)
      */
     @RequestMapping("/api/disks/**")
     ResponseEntity<?> proxyCddbApi(HttpServletRequest request) {
-        return proxyPluginApi("cddb-plugin-1.3.0", request)
-    }
-
-    @RequestMapping("/api/disks/count")
-    ResponseEntity<?> proxyCddbCount() {
-        return proxyPluginApi("cddb-plugin-1.3.0", null)
-    }
-
-    @RequestMapping("/api/disks/health")
-    ResponseEntity<?> proxyCddbHealth() {
-        return proxyPluginApi("cddb-plugin-1.3.0", null)
+        return proxyPluginApi("cddb", request)
     }
 
     /**
@@ -99,51 +126,34 @@ class PluginDispatcherController {
     }
 
     /**
-     * Исполнение метода обработчика
-     */
-    private ResponseEntity<?> executeHandlerMethod(def springContext, def handlerMethod, HttpServletRequest request) {
-        try {
-            // Пока просто возвращаем информацию о найденном обработчике
-            // В будущем можно реализовать полное исполнение
-            return ResponseEntity.ok([
-                    message: "Handler found in plugin",
-                    handler: handlerMethod.toString(),
-                    requestPath: request.requestURI,
-                    note: "Direct handler execution will be implemented in the next version"
-            ])
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body([error: "Handler execution failed: ${e.message}"])
-        }
-    }
-
-    /**
      * Информация о доступном API плагина
      */
-    private Map<String, Object> getPluginApiInfo(PluginInstance plugin, HttpServletRequest request) {
+    private Map<String, Object> getPluginApiInfo(String pluginId, String requestPath) {
         def endpoints = []
 
-        // Для CDDB плагина
-        if (plugin.id.contains("cddb")) {
+        if (pluginId == "cddb") {
             endpoints.addAll([
-                    "GET    /plugins/${plugin.id}/api/disks - Get all CD disks",
-                    "GET    /plugins/${plugin.id}/api/disks/{id} - Get disk by ID",
-                    "POST   /plugins/${plugin.id}/api/disks - Create new disk",
-                    "PUT    /plugins/${plugin.id}/api/disks/{id} - Update disk",
-                    "DELETE /plugins/${plugin.id}/api/disks/{id} - Delete disk",
-                    "GET    /plugins/${plugin.id}/api/disks/count - Count disks",
-                    "GET    /plugins/${plugin.id}/api/disks/health - Health check"
+                    "GET    /plugins/${pluginId}/api/disks - Get all CD disks",
+                    "GET    /plugins/${pluginId}/api/disks/{id} - Get disk by ID",
+                    "POST   /plugins/${pluginId}/api/disks - Create new disk",
+                    "PUT    /plugins/${pluginId}/api/disks/{id} - Update disk",
+                    "DELETE /plugins/${pluginId}/api/disks/{id} - Delete disk",
+                    "GET    /plugins/${pluginId}/api/disks/count - Count disks",
+                    "GET    /plugins/${pluginId}/api/disks/health - Health check"
+            ])
+        } else if (pluginId == "script") {
+            endpoints.addAll([
+                    "GET    /plugins/${pluginId}/api/scripts - List scripts",
+                    "POST   /plugins/${pluginId}/api/scripts/execute - Execute script"
             ])
         }
 
         return [
-                pluginId: plugin.id,
-                pluginName: plugin.descriptor.name,
-                version: plugin.descriptor.version,
+                pluginId: pluginId,
                 availableEndpoints: endpoints,
-                requestedPath: request?.requestURI,
-                message: "Access plugin API through /plugins/${plugin.id}/api/**",
-                directAccessNote: "Direct endpoint mapping needs to be configured"
+                requestedPath: requestPath,
+                message: "Access plugin API through /plugins/${pluginId}/api/**",
+                note: "For backward compatibility, CDDB API is also available at /api/disks/**"
         ]
     }
 
@@ -156,7 +166,8 @@ class PluginDispatcherController {
         if (!plugin) {
             return ResponseEntity.ok([
                     status: "NOT_FOUND",
-                    message: "Plugin ${pluginId} not loaded"
+                    message: "Plugin ${pluginId} not loaded",
+                    availablePlugins: pluginManager.loadedPlugins.keySet()
             ])
         }
 
@@ -167,7 +178,8 @@ class PluginDispatcherController {
                 status: plugin.started ? "RUNNING" : "STOPPED",
                 health: "OK",
                 timestamp: new Date(),
-                apiAccess: "Use /plugins/${pluginId}/api/** to access plugin API"
+                apiAccess: "/plugins/${pluginId}/api/**",
+                directAccess: pluginId == "cddb" ? "/api/disks/** (legacy)" : "N/A"
         ])
     }
 }

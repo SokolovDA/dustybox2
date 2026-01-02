@@ -5,31 +5,26 @@ plugins {
 version = '1.3.0'
 
 dependencies {
-    // Только compileOnly, чтобы не дублировать зависимости ядра
     compileOnly project(':dustybox-core')
-
-    // Spring зависимости (уже есть в ядре, поэтому compileOnly)
     compileOnly 'org.springframework.boot:spring-boot-starter-web:4.0.1'
     compileOnly 'org.springframework.boot:spring-boot-starter-data-jpa:4.0.1'
+    compileOnly 'org.apache.groovy:groovy:5.0.3'
 }
 
 jar {
+    // Используем стабильное имя без версии
     archiveBaseName = 'cddb-plugin'
-    archiveVersion = '1.3.0'
 
-    // Не включаем зависимости ядра в JAR плагина
     from {
         configurations.runtimeClasspath.collect {
             it.isDirectory() ? it : zipTree(it)
         }
     }
 
-    // Исключаем классы ядра
     exclude 'com/dustymotors/core/**'
     exclude 'META-INF/*.RSA', 'META-INF/*.SF', 'META-INF/*.DSA'
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
-    // Добавляем файл plugin.yaml
     into('META-INF/plugins') {
         from 'src/main/resources/plugin.yaml'
     }
